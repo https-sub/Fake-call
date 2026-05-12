@@ -3,26 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Body Puppeteer</title>
+    <title>AI Immersive Call</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        body { background-color: #000; margin: 0; overflow: hidden; }
+        body { background-color: #000; margin: 0; overflow: hidden; height: 100vh; }
         
-        /* The Full Screen Photo */
+        /* FULL SCREEN CHARACTER CONTAINER */
         #puppetContainer {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
+            z-index: 1;
+            transition: transform 0.1s ease-out;
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: transform 0.1s ease-out; /* Smooth following */
         }
 
         #puppetImg {
@@ -31,20 +33,40 @@
             object-fit: cover;
         }
 
-        /* User Camera in Bottom Left */
+        /* USER CAM BOTTOM LEFT */
         #userCamContainer {
             position: fixed;
-            bottom: 20px;
+            bottom: 120px;
             left: 20px;
             width: 100px;
-            height: 130px;
+            height: 140px;
             border-radius: 15px;
-            border: 2px solid white;
+            border: 2px solid rgba(255, 255, 255, 0.5);
             overflow: hidden;
             z-index: 100;
+            background: #000;
         }
-
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+        /* UI CONTROLS */
+        .control-panel {
+            position: fixed;
+            bottom: 30px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            z-index: 200;
+        }
+        .btn-box {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(15px);
+            border-radius: 50px;
+            padding: 12px 35px;
+            display: flex;
+            gap: 35px;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
     </style>
 </head>
 <body>
@@ -57,32 +79,66 @@
         <video id="inputVideo" playsinline></video>
     </div>
 
-    <canvas id="outputCanvas" class="hidden"></canvas>
+    <div class="absolute top-10 w-full text-center z-50 pointer-events-none">
+        <h1 class="text-xl font-bold tracking-widest text-white drop-shadow-lg">LIVE AI PUPPET</h1>
+        <p id="timer" class="text-zinc-400 font-mono text-sm">00:00</p>
+    </div>
+
+    <div class="control-panel">
+        <div class="btn-box">
+            <label class="cursor-pointer text-white hover:text-amber-500">
+                <input type="file" accept="image/*" class="hidden" onchange="loadPhoto(event)">
+                <i class="fas fa-image text-2xl"></i>
+            </label>
+
+            <button onclick="window.location.reload()" class="bg-red-500 w-14 h-14 rounded-full flex items-center justify-center text-white">
+                <i class="fas fa-phone-slash text-xl rotate-[135deg]"></i>
+            </button>
+
+            <button onclick="alert('Stand back so the AI can see your body to move the puppet!')" class="text-white hover:text-blue-400">
+                <i class="fas fa-info-circle text-2xl"></i>
+            </button>
+        </div>
+    </div>
 
     <script>
         const videoElement = document.getElementById('inputVideo');
         const puppet = document.getElementById('puppetContainer');
+        let timer = 0;
 
+        // Timer Function
+        setInterval(() => {
+            timer++;
+            const m = String(Math.floor(timer/60)).padStart(2,'0');
+            const s = String(timer%60).padStart(2,'0');
+            document.getElementById('timer').innerText = `${m}:${s}`;
+        }, 1000);
+
+        // Photo Upload Function
+        function loadPhoto(event) {
+            const file = event.target.files[0];
+            if (file) {
+                document.getElementById('puppetImg').src = URL.createObjectURL(file);
+            }
+        }
+
+        // Body Tracking Logic
         function onResults(results) {
             if (!results.poseLandmarks) return;
-
-            // 1. Get the Center of your Body (Mid-Hip)
-            const midHip = results.poseLandmarks[24]; // Right Hip
+            const midHip = results.poseLandmarks[24]; 
             
-            // 2. Map your movement to the Photo
-            // X: -50 to 50px movement | Y: -50 to 50px movement
-            const moveX = (0.5 - midHip.x) * 200; 
-            const moveY = (midHip.y - 0.5) * 200;
-            const scale = 1 + (Math.abs(moveY) / 500); // Zooms slightly when moving
+            // Movement sensitivity
+            const moveX = (0.5 - midHip.x) * 150; 
+            const moveY = (midHip.y - 0.5) * 150;
+            const scale = 1 + (Math.abs(moveY) / 400);
 
-            // 3. Apply the movement to the Photo
             puppet.style.transform = `translate(${moveX}px, ${moveY}px) scale(${scale})`;
-
-            // 4. Special Action: JUMP detection
-            if (midHip.y < 0.4) { // You jumped high
-                puppet.style.filter = "brightness(1.5)";
+            
+            // JUMP effect
+            if (midHip.y < 0.45) {
+                puppet.style.filter = "brightness(1.4) contrast(1.1)";
             } else {
-                puppet.style.filter = "brightness(1)";
+                puppet.style.filter = "brightness(1) contrast(1)";
             }
         }
 
@@ -90,21 +146,12 @@
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
         });
 
-        pose.setOptions({
-            modelComplexity: 1,
-            smoothLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true });
         pose.onResults(onResults);
 
         const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await pose.send({image: videoElement});
-            },
-            width: 640,
-            height: 480
+            onFrame: async () => { await pose.send({image: videoElement}); },
+            width: 640, height: 480
         });
         camera.start();
     </script>
